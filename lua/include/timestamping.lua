@@ -64,19 +64,33 @@ local PKT_TX_UDP_CKSUM		= 0x6000
 -- other constants
 local ETHER_TYPE_1588		= 0x88F7
 
-function mod.fillL2Packet(buf)
+function mod.fillL2Packet(buf, seq)
+    seq = seq or (((3 * 255) + 2) * 255 + 1) * 255
 	buf.pkt.pkt_len = 60
 	buf.pkt.data_len = 60
 	buf.ol_flags = bit.bor(buf.ol_flags, PKT_TX_IEEE1588_TMST)
 	local data = ffi.cast("uint8_t*", buf.pkt.data)
 	-- PTP v2 L2 packet
-	for i = 0, 11 do
+    data[3] = bit.band(seq, 0xFF)
+    data[2] = bit.rshift(seq, 8)
+    data[1] = bit.rshift(seq, 16)
+    data[0] = bit.rshift(seq, 24)
+	for i = 4, 11 do
 		data[i] = i
 	end
 	data[12] = 0x88
 	data[13] = 0xF7
 	data[14] = 0x00
 	data[15] = 0x02
+end
+
+function mod.readSeq(buf)
+	if buf.pkt.pkt_len < 4 then
+	  return nil
+	end
+	local data = ffi.cast("uint8_t*", buf.pkt.data)
+	local seq = ((data[0] * 255 + data[1]) * 255 + data[2]) * 255 + data[3]
+	return seq
 end
 
 function mod.fillPacket(buf, port, size)
